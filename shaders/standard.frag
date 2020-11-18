@@ -180,6 +180,7 @@ void main() {
         // Some specular textures are grayscale:
         specularColor = length(specularColor.gb) > 0.0 ? specularColor : specularColor.rrra;
         vec3 reflectDir = normalize(-E - 2.0 * dot(-E, N) * N);
+        reflectDir = pow(reflectDir, vec3(32));
 
         // Maybe fix so that the cone doesnt trace below the plane defined by the surface normal.
         // For example so that the floor doesnt reflect itself when looking at it with a small angle
@@ -188,5 +189,20 @@ void main() {
         specularReflection = ShowIndirectSpecular > 0.5 ? 2.0 * specularColor.rgb * tracedSpecular.rgb : vec3(0.0);
     }
 
-    color = vec4(diffuseReflection + specularReflection, alpha);
+    color = vec4(diffuseReflection + specularReflection + 0.1 * materialColor.rgb, alpha); //plus ambient light
+    if (color.r < 0){
+        color.r = 0.0f;
+    } else if (color.r > 1){
+        color.r = 1.0f;
+    }
+    if (color.g < 0){
+        color.g = 0.0f;
+    } else if (color.g > 1){
+        color.g = 1.0f;
+    }
+    if (color.b < 0){
+        color.b = 0.0f;
+    } else if (color.r > 1){
+        color.b = 1.0f;
+    }
 }
