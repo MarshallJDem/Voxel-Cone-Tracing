@@ -189,7 +189,9 @@ void main() {
         specularReflection = ShowIndirectSpecular > 0.5 ? 2.0 * specularColor.rgb * tracedSpecular.rgb : vec3(0.0);
     }
 
-    color = vec4(diffuseReflection + specularReflection + 0.1 * materialColor.rgb, alpha); //plus ambient light
+    vec3 ambient = ShowAmbientOcculision > 0.5 ? 0.1 * materialColor.rbg : vec3(0.0);
+  
+    color = vec4(diffuseReflection + specularReflection + ambient, alpha); //plus ambient light
     if (color.r < 0){
         color.r = 0.0f;
     } else if (color.r > 1){
