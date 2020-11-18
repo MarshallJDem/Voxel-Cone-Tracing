@@ -56,17 +56,6 @@ vec3 coneDirections[6] = vec3[]
                             );
 float coneWeights[6] = float[](0.25, 0.15, 0.15, 0.15, 0.15, 0.15);
 
-// // 5 90 degree cones
-// const int NUM_CONES = 5;
-// vec3 coneDirections[5] = vec3[]
-// (                            vec3(0, 1, 0),
-//                             vec3(0, 0.707, 0.707),
-//                             vec3(0, 0.707, -0.707),
-//                             vec3(0.707, 0.707, 0),
-//                             vec3(-0.707, 0.707, 0)
-//                             );
-// float coneWeights[5] = float[](0.28, 0.18, 0.18, 0.18, 0.18);
-
 mat3 tangentToWorld;
 
 vec4 SampleVoxelTexutre(vec3 worldPosition, float mipLevel) 
@@ -79,7 +68,6 @@ vec4 SampleVoxelTexutre(vec3 worldPosition, float mipLevel)
 
 vec4 ConeTrace(vec3 direction, float TanHalf, out float occlusion) 
 {
-    
     // level 0 mipmap is full size, level 1 is half that size and so on
     float mipLevel = 0.0f;
 
@@ -126,11 +114,13 @@ vec4 ConeTrace(vec3 direction, float TanHalf, out float occlusion)
 	return outputColor;
 }
 
-vec4 indirectLight(out float occlusion_out) {
+vec4 indirectLight(out float occlusion_out) 
+{
     vec4 color = vec4(0);
     occlusion_out = 0.0;
 
-    for(int i = 0; i < NUM_CONES; i++) {
+    for(int i = 0; i < NUM_CONES; i++) 
+	{
         float occlusion = 0.0;
         // 60 degree cones -> tan(30) = 0.577
         // 90 degree cones -> tan(45) = 1.0

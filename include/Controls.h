@@ -4,14 +4,14 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 
-class VCTApplication; // Forward declaration
+class Application; // Forward declaration
 
 class Controls {
 public:
 	Controls(float speed, float mouseSensitivity);
 	~Controls();
 
-	void updateFromInputs(VCTApplication* app, float deltaTime);
+	void updateFromInputs(Application* app, float deltaTime);
 
 protected:
 	// Settings

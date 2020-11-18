@@ -9,7 +9,7 @@
 //#include <stb_image.h>
 #include <iostream>
 
-#include "VCTApplication.h"
+#include "Application.h"
 
 const int width_ = 1280;
 const int height_ = 720;
@@ -94,7 +94,7 @@ int main(void) {
     double previousTime, currentTime;
     previousTime = glfwGetTime();
 
-    VCTApplication app(width_, height_, window);
+    Application app(width_, height_, window);
     if (!app.initialize()) {
         fprintf(stderr, "Failed to initialize TestApplication\n");
         return EXIT_FAILURE;
