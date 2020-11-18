@@ -92,7 +92,7 @@ bool VCTApplication::loadObject(std::string path, std::string name, glm::vec3 po
 }
 
 bool VCTApplication::initialize() {
-	std::cout << "Initializing VCT" << std::endl;
+	std::cout << "Initializing CSCI 580 Voxel Cone Tracing" << std::endl;
 
 	// Init camera parameters
 	glm::vec3 pos = glm::vec3(0.0, 0.0, 5.0);

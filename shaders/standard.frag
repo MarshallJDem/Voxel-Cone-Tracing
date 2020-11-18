@@ -39,8 +39,10 @@ uniform float ShowAmbientOcculision;
 
 uniform vec3 LightDirection;
 
+//cone tracing constants
 const float MAX_DIST = 100.0;
-const float ALPHA_THRESH = 0.95;
+const float ALPHA_THRESH = 1.0f;
+const float MAX_MIP_LEVEL = 100.0f;
 
 // 6 60 degree cone
 const int NUM_CONES = 6;
@@ -67,44 +69,61 @@ float coneWeights[6] = float[](0.25, 0.15, 0.15, 0.15, 0.15, 0.15);
 
 mat3 tangentToWorld;
 
-vec4 sampleVoxels(vec3 worldPosition, float lod) {
-    vec3 offset = vec3(1.0 / VoxelDimensions, 1.0 / VoxelDimensions, 0); // Why??
+vec4 SampleVoxelTexutre(vec3 worldPosition, float mipLevel) 
+{
+    vec3 offset = vec3(1.0 / VoxelDimensions, 1.0 / VoxelDimensions, 0);
     vec3 voxelTextureUV = worldPosition / (VoxelGridWorldSize * 0.5);
     voxelTextureUV = voxelTextureUV * 0.5 + 0.5 + offset;
-    return textureLod(VoxelTexture, voxelTextureUV, lod);
+    return textureLod(VoxelTexture, voxelTextureUV, mipLevel);
 }
 
-// Third argument to say how long between steps?
-vec4 coneTrace(vec3 direction, float tanHalfAngle, out float occlusion) {
+vec4 ConeTrace(vec3 direction, float TanHalf, out float occlusion) 
+{
     
-    // lod level 0 mipmap is full size, level 1 is half that size and so on
-    float lod = 0.0;
-    vec3 color = vec3(0);
-    float alpha = 0.0;
-    occlusion = 0.0;
+    // level 0 mipmap is full size, level 1 is half that size and so on
+    float mipLevel = 0.0f;
 
-    float voxelWorldSize = VoxelGridWorldSize / VoxelDimensions;
-    float dist = voxelWorldSize; // Start one voxel away to avoid self occlusion
-    vec3 startPos = Position_world + Normal_world * voxelWorldSize; // Plus move away slightly in the normal direction to avoid
-                                                                    // self occlusion in flat surfaces
+	//output definitions
+	vec4 outputColor = vec4(0.0f);
+	float alpha = 0.0f;
+    occlusion = 0.0f;
 
-    while(dist < MAX_DIST && alpha < ALPHA_THRESH) {
-        // smallest sample diameter possible is the voxel size
-        float diameter = max(voxelWorldSize, 2.0 * tanHalfAngle * dist);
-        float lodLevel = log2(diameter / voxelWorldSize);
-        vec4 voxelColor = sampleVoxels(startPos + dist * direction, lodLevel);
+	float voxelWorldSize = VoxelGridWorldSize / VoxelDimensions;
+	float voxelSteps = 1.0f / voxelWorldSize;
 
-        // front-to-back compositing
-        float a = (1.0 - alpha);
-        color += a * voxelColor.rgb;
-        alpha += a * voxelColor.a;
-        //occlusion += a * voxelColor.a;
-        occlusion += (a * voxelColor.a) / (1.0 + 0.03 * diameter);
-        dist += diameter * 0.5; // smoother
-        //dist += diameter; // faster but misses more voxels
+	//skip one voxel in front to avoid computing (self emission and direct illumination on object twice)
+    float distance = voxelWorldSize; 
+    vec3 start = Position_world + Normal_world * distance; 
+
+    while(alpha < ALPHA_THRESH) 
+	{
+		//compute cone diameter
+        float diameter = max(voxelWorldSize, 2 * TanHalf * distance);//scale by voxel size at certain step
+
+		//compute mip_level by converting to mip map lvel or lod
+        //exmaple
+		//log2(1/x * x) = 0
+		//log2(1/(x/2) * x) = 1
+		//log2(1/(x/4) * x) = 2
+		float mipLevel = log2(diameter * voxelSteps);
+
+		if(mipLevel > MAX_MIP_LEVEL)
+			break;
+
+		//sample the voxel texture at mipLevel
+		//vec3 samplePosition = start + distance * direction;
+        vec4 smapledColor = SampleVoxelTexutre(start + distance * direction, mipLevel);
+
+        //blend equation
+		float oneMinusAlpha = (1.0 - alpha); 
+		outputColor = vec4(outputColor.xyz + (oneMinusAlpha * smapledColor.rgb), outputColor.w + (oneMinusAlpha * smapledColor.a));
+		alpha = outputColor.w;
+		
+		//update occlusin and sample distance
+		occlusion += oneMinusAlpha * smapledColor.a;
+        distance += diameter;
     }
-
-    return vec4(color, alpha);
+	return outputColor;
 }
 
 vec4 indirectLight(out float occlusion_out) {
@@ -115,7 +134,7 @@ vec4 indirectLight(out float occlusion_out) {
         float occlusion = 0.0;
         // 60 degree cones -> tan(30) = 0.577
         // 90 degree cones -> tan(45) = 1.0
-        color += coneWeights[i] * coneTrace(tangentToWorld * coneDirections[i], 0.577, occlusion);
+        color += coneWeights[i] * ConeTrace(tangentToWorld * coneDirections[i], 0.577, occlusion);
         occlusion_out += coneWeights[i] * occlusion;
     }
 
@@ -184,26 +203,14 @@ void main() {
         // Maybe fix so that the cone doesnt trace below the plane defined by the surface normal.
         // For example so that the floor doesnt reflect itself when looking at it with a small angle
         float specularOcclusion;
-        vec4 tracedSpecular = coneTrace(reflectDir, 0.07, specularOcclusion); // 0.2 = 22.6 degrees, 0.1 = 11.4 degrees, 0.07 = 8 degrees angle
+		// 0.2 = 22.6 degrees
+		//0.1 = 11.4 degrees
+		//0.07 = 8 degrees angle
+        vec4 tracedSpecular = ConeTrace(reflectDir, 0.07, specularOcclusion); 
         specularReflection = ShowIndirectSpecular > 0.5 ? 2.0 * specularColor.rgb * tracedSpecular.rgb : vec3(0.0);
     }
 
     vec3 ambient = ShowAmbientOcculision > 0.5 ? 0.1 * materialColor.rbg : vec3(0.0);
   
     color = vec4(diffuseReflection + specularReflection + ambient, alpha); //plus ambient light
-    if (color.r < 0){
-        color.r = 0.0f;
-    } else if (color.r > 1){
-        color.r = 1.0f;
-    }
-    if (color.g < 0){
-        color.g = 0.0f;
-    } else if (color.g > 1){
-        color.g = 1.0f;
-    }
-    if (color.b < 0){
-        color.b = 0.0f;
-    } else if (color.r > 1){
-        color.b = 1.0f;
-    }
 }
