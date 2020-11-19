@@ -147,6 +147,141 @@ vec3 calcBumpNormal() {
     return normalize(tangentToWorld * bumpNormal_tangent);
 }
 
+
+float DistributionGGX(vec3 N, vec3 H, float roughness)
+{
+    const float PI = 3.14159265359;
+    float a      = roughness*roughness;
+    float a2     = a*a;
+    float NdotH  = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH*NdotH;
+
+    float nom   = a2;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+
+    return nom / denom;
+}
+
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+    float r = (roughness + 1.0);
+    float k = (r*r) / 8.0;
+
+    float nom   = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+
+    return nom / denom;
+}
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+{
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx2  = GeometrySchlickGGX(NdotV, roughness);
+    float ggx1  = GeometrySchlickGGX(NdotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
+vec3 BRDF(vec3 L, vec3 N, vec3 V, vec3 ka, vec4 ks)
+{
+    // common variables
+    vec3 H = normalize(V + L);
+
+    // compute dot procuts
+    float dotNL = max(dot(N, L), 0.0f);
+    float dotNH = max(dot(N, H), 0.0f);
+    float dotLH = max(dot(L, H), 0.0f);
+
+    // emulate fresnel effect
+    vec3 F0 = vec3(0.04);
+    vec3 fresnel = F0 + (1.0f - F0) * pow(1.0f - dotLH, 5.0f);
+
+    // decode specular power
+    float spec = exp2(11.0f * ks.a + 1.0f);
+    
+    // specular factor
+    float blinnPhong = pow(dotNH, spec);
+
+    // energy conservation, aprox normalization factor
+    blinnPhong *= spec * 0.0397f + 0.3183f;
+
+    // specular term
+    float lightSpecular = 1.0f;
+    vec3 specular = ks.rgb * lightSpecular * blinnPhong * fresnel;
+
+    // diffuse term
+    float lightDiffuse = 1.0f;
+    vec3 diffuse = ka.rgb * lightDiffuse;
+
+    // return composition
+    return (diffuse + specular) * dotNL;
+}
+
+vec4 CalculateIndirectLighting(vec3 V, vec3 N, vec3 albedo, vec4 specular, bool ambientOcclusion)
+{
+    vec4 specularTrace = vec4(0.0f);
+    vec4 diffuseTrace = vec4(0.0f);
+    vec3 coneDirection = vec3(0.0f);
+
+    // component greater than zero
+    if(any(greaterThan(specular.rgb, specularTrace.rgb)))
+    {
+        //vec3 viewDirection = normalize(cameraPosition - position);
+        vec3 coneDirection = normalize(reflect(-V, N));
+  
+        const float PI = 3.14159265f;
+        const float HALF_PI = 1.57079f;
+
+        // specular cone setup, minimum of 1 grad, fewer can severly slow down performance
+        float aperture = clamp(tan(HALF_PI * (1.0f - specular.a)), 0.0174533f, PI);
+        //specularTrace = TraceCone(position, N, coneDirection, aperture, false);
+
+        vec3 reflectDir = normalize(-V - 2.0 * dot(-V, N) * N);
+        float specularOcclusion;
+        vec4 tracedSpecular = ConeTrace(reflectDir, aperture, specularOcclusion); // 0.2 = 22.6 degrees, 0.1 = 11.4 degrees, 0.07 = 8 degrees angle
+        specularTrace = ConeTrace(reflectDir, 0.07, specularOcclusion);
+        specularTrace.rgb *= specular.rgb;
+    }
+
+    // component greater than zero
+    if(any(greaterThan(albedo, diffuseTrace.rgb)))
+    {
+        // diffuse cone setup
+        const float aperture = 0.57735f;
+        vec3 guide = vec3(0.0f, 1.0f, 0.0f);
+
+        if (abs(dot(N,guide)) == 1.0f)
+        {
+            guide = vec3(0.0f, 0.0f, 1.0f);
+        }
+
+        // Find a tangent and a bitangent
+        vec3 right = normalize(guide - dot(N, guide) * N);
+        vec3 up = cross(right, N);
+
+        for(int i = 0; i < 6; i++)
+        {
+            coneDirection = N;
+            coneDirection += coneDirections[i].x * right + coneDirections[i].z * up;
+            coneDirection = normalize(coneDirection);
+            // cumulative result
+            float specularOcclusion;
+            vec4 tracedSpecular = ConeTrace(coneDirection, 0.07, specularOcclusion); // 0.2 = 22.6 degrees, 0.1 = 11.4 degrees, 0.07 = 8 degrees angle
+            diffuseTrace += tracedSpecular * coneWeights[i];
+        }
+
+        diffuseTrace.rgb *= albedo;
+    }
+
+    float bounceStrength = 1.0f;
+    vec3 result = bounceStrength * (diffuseTrace.rgb + specularTrace.rgb);
+    //vec3 result = bounceStrength * (diffuseTrace.rgb + specularTrace.rgb);
+
+    float aoAlpha = 0.01f;
+    return vec4(result, ambientOcclusion ? clamp(1.0f - diffuseTrace.a + aoAlpha, 0.0f, 1.0f) : 1.0f);
+}
+
 void main() {
     vec4 materialColor = texture(DiffuseTexture, UV);
     float alpha = materialColor.a;
@@ -162,45 +297,16 @@ void main() {
     vec3 L = LightDirection;
     vec3 E = normalize(EyeDirection_world);
     
-    // Calculate diffuse light
-    vec3 diffuseReflection;
-    {
-        // Shadow map
-        float visibility = texture(ShadowMap, vec3(Position_depth.xy, (Position_depth.z - 0.0005)/Position_depth.w));
-
-        // Direct diffuse light
-        float cosTheta = max(0, dot(N, L));
-        vec3 directDiffuseLight = ShowDiffuse > 0.5 ? vec3(visibility * cosTheta) : vec3(0.0);
-
-        // Indirect diffuse light
-		float occlusion = 0.0;
-        vec3 indirectDiffuseLight = indirectLight(occlusion).rgb;
-        indirectDiffuseLight = ShowIndirectDiffuse > 0.5 ? 4.0 * indirectDiffuseLight : vec3(0.0);
-
-        // Sum direct and indirect diffuse light and tweak a little bit
-        occlusion = min(1.0, 1.5 * occlusion); // Make occlusion brighter
-        diffuseReflection = 2.0 * occlusion * (directDiffuseLight + indirectDiffuseLight) * materialColor.rgb;
-    }
+    // Direct light
+    float visibility = texture(ShadowMap, vec3(Position_depth.xy, (Position_depth.z - 0.0005)/Position_depth.w));
+    vec3 directLight = ShowDiffuse > 0.5 ? 1.25f * BRDF(L, N, E, vec3(1.0), vec4(0.0)) * materialColor.rgb * visibility : vec3(0.0);	
     
-    // Calculate specular light
-    vec3 specularReflection;
-    {
-        vec4 specularColor = texture(SpecularTexture, UV);
-        // Some specular textures are grayscale:
-        specularColor = length(specularColor.gb) > 0.0 ? specularColor : specularColor.rrra;
-        vec3 reflectDir = normalize(-E - 2.0 * dot(-E, N) * N);
+    // Indirect light
+    vec4 specularColor = texture(SpecularTexture, UV);
+    // Some specular textures are grayscale:
+    specularColor = length(specularColor.gb) > 0.0 ? specularColor : specularColor.rrra;
 
-        // Maybe fix so that the cone doesnt trace below the plane defined by the surface normal.
-        // For example so that the floor doesnt reflect itself when looking at it with a small angle
-        float specularOcclusion;
-		// 0.2 = 22.6 degrees
-		//0.1 = 11.4 degrees
-		//0.07 = 8 degrees angle
-        vec4 tracedSpecular = ConeTrace(reflectDir, 0.07, specularOcclusion); 
-        specularReflection = ShowIndirectSpecular > 0.5 ? 2.0 * specularColor.rgb * tracedSpecular.rgb : vec3(0.0);
-    }
+    vec3 indirectLight = ShowIndirectSpecular > 0.5 ? 1.25f * CalculateIndirectLighting(E, N, materialColor.rgb, specularColor, true).rgb : vec3(0.0);
 
-    vec3 ambient = ShowAmbientOcculision > 0.5 ? 0.1 * materialColor.rbg : vec3(0.0);
-  
-    color = vec4(diffuseReflection + specularReflection + ambient, alpha); //plus ambient light
+    color = vec4(directLight + indirectLight, alpha);
 }
