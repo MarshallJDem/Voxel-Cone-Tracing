@@ -9,7 +9,7 @@
 //#include <stb_image.h>
 #include <iostream>
 
-#include "VCTApplication.h"
+#include "Application.h"
 
 const int width_ = 1280;
 const int height_ = 720;
@@ -58,7 +58,7 @@ int main(void) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
-    GLFWwindow* window = glfwCreateWindow(width_, height_, "VCT", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(width_, height_, "CSCI 580 Voxel Cone Tracing", NULL, NULL);
 
     // Check for Valid Context
     if (window == NULL) {
@@ -94,7 +94,7 @@ int main(void) {
     double previousTime, currentTime;
     previousTime = glfwGetTime();
 
-    VCTApplication app(width_, height_, window);
+    Application app(width_, height_, window);
     if (!app.initialize()) {
         fprintf(stderr, "Failed to initialize TestApplication\n");
         return EXIT_FAILURE;

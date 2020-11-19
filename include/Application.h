@@ -1,5 +1,5 @@
-#ifndef VCTAPPLICATION_H
-#define VCTAPPLICATION_H
+#ifndef Application_H
+#define Application_H
 
 #include <GLFW/glfw3.h>
 
@@ -11,12 +11,12 @@
 #include "Camera.h"
 #include "Controls.h"
 #include "Texture.h"
-#include "VCTApplication.h"
+#include "Application.h"
 
-class VCTApplication {
+class Application {
 public:
-	VCTApplication(const int width, const int height, GLFWwindow* window);
-	~VCTApplication();
+	Application(const int width, const int height, GLFWwindow* window);
+	~Application();
 
 	int getWindowWidth();
 	int getWindowHeight();
@@ -43,7 +43,7 @@ protected:
 	std::vector<Object*> objects_;
 	std::map<int, Material*> materials_;
 
-	GLuint standardShader_;
+	GLuint voxelTraceShader_;
 
 	const float sponzaScale_ = 0.05f;
 	glm::vec3 lightDirection_ = glm::vec3(-0.3, 0.9, -0.25);
@@ -75,4 +75,4 @@ protected:
 	bool showDiffuse_ = true, showIndirectDiffuse_ = true, showIndirectSpecular_ = true, showAmbientOcculision_ = true;
 };
 
-#endif // VCTAPPLICATION_H
+#endif // Application_H
