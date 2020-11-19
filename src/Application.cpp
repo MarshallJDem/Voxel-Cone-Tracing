@@ -358,12 +358,8 @@ void Application::drawDepthTexture() {
 	glViewport(0, 0, width_, height_);
 }
 
-<<<<<<< HEAD:src/VCTApplication.cpp
-void VCTApplication::voxelizeScene() {
-	/* Disable any sort of discarding since we arent actually rendering a scene and are instead trying to voxelize everything in the scene*/
-=======
 void Application::voxelizeScene() {
->>>>>>> 28dbe6a052f870d05cb3aa12f9462b46e26ac776:src/Application.cpp
+	/* Disable any sort of discarding since we arent actually rendering a scene and are instead trying to voxelize everything in the scene*/
 	glDisable(GL_CULL_FACE);
     glDisable(GL_DEPTH_TEST);
     
