@@ -109,8 +109,8 @@ bool VCTApplication::initialize() {
 	standardShader_ = loadShaders("../shaders/standard.vert", "../shaders/standard.frag");
     voxelizationShader_ = loadShaders("../shaders/voxelization.vert", "../shaders/voxelization.frag", "../shaders/voxelization.geom");
     shadowShader_ = loadShaders("../shaders/shadow.vert", "../shaders/shadow.frag");
-    quadShader_ = loadShaders("../shaders/quad.vert", "../shaders/quad.frag");
-    renderVoxelsShader_ = loadShaders("../shaders/renderVoxels.vert", "../shaders/renderVoxels.frag", "../shaders/renderVoxels.geom");
+   // quadShader_ = loadShaders("../shaders/quad.vert", "../shaders/quad.frag");
+  //  renderVoxelsShader_ = loadShaders("../shaders/renderVoxels.vert", "../shaders/renderVoxels.frag", "../shaders/renderVoxels.geom");
 
     // Load objects
     std::cout << "Loading objects... " << std::endl;
@@ -162,17 +162,28 @@ bool VCTApplication::initialize() {
     // ------------------------------------------------------------------- //
     // --------------------- 3D texture initialization ------------------- //
     // ------------------------------------------------------------------- //
+
+	/* this size indicates the size of one dimension of the voxel octree. In this case its 512 (so 512 x 512 x 512 voxels) */
     voxelTexture_.size = voxelDimensions_;  
 
     glEnable(GL_TEXTURE_3D);
     
+	/* We store the voxel octree in a 3D texture because 3d images act very similar to an octree. (2D image = quadtree)
+	* For example, if you get a vertex that is inbetween a few voxels, 
+	* you can simply average the values by setting your texture to use linear interpolation.
+	* To access voxel data you just do texture lookup as a result.
+	* Also it will be available on GPU easier if u do this. 
+	*/
     glGenTextures(1, &voxelTexture_.textureID);
     glBindTexture(GL_TEXTURE_3D, voxelTexture_.textureID);
+	/* What to do when the tree is scaled down (Minimized) */
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	/* What to do when the tree is scaled up (Magnified) */
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 	// Fill 3D texture with empty values
-	int numVoxels = voxelTexture_.size * voxelTexture_.size * voxelTexture_.size;
+	int numVoxels = voxelTexture_.size * voxelTexture_.size * voxelTexture_.size; /* 512 x 512 x 512  */
+	/* 4 components of each voxel, 1 byte per component */
 	GLubyte* data = new GLubyte[numVoxels*4];
 	for(int i = 0; i < voxelTexture_.size ; i++) {
 		for(int j = 0; j < voxelTexture_.size ; j++) {
@@ -185,9 +196,13 @@ bool VCTApplication::initialize() {
 		}
 	}
 
+	/* Create the texture for opengl. GL_RGBA8 means it will have 4 components, 8 bits each (1 byte). Unsigned.  */
 	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA8, voxelTexture_.size, voxelTexture_.size, voxelTexture_.size, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 	delete[] data;
 
+	/* Strange step. This seems to be unuseful since we haven't put any data in yet. 
+	* I must misunderstand how/when this is calculated. Perhaps it just initializes it.
+	*/
 	glGenerateMipmap(GL_TEXTURE_3D);
 
 	// Create projection matrices used to project stuff onto each axis in the voxelization step
@@ -344,20 +359,26 @@ void VCTApplication::drawDepthTexture() {
 }
 
 void VCTApplication::voxelizeScene() {
+	/* Disable any sort of discarding since we arent actually rendering a scene and are instead trying to voxelize everything in the scene*/
 	glDisable(GL_CULL_FACE);
     glDisable(GL_DEPTH_TEST);
     
+	/* View port is the entire width and height of our voxel tree (1 pixel = 1 voxel) */
     glViewport(0, 0, voxelTexture_.size, voxelTexture_.size);
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	/* Load in our voxelization shaders*/
     glUseProgram(voxelizationShader_);
 
     // Set uniforms
+	/* Pass the voxel dimension size */
     glUniform1i(glGetUniformLocation(voxelizationShader_, "VoxelDimensions"), voxelTexture_.size);
+	/* Pass in the projection axes */
     glUniformMatrix4fv(glGetUniformLocation(voxelizationShader_, "ProjX"), 1, GL_FALSE, &projX_[0][0]);
     glUniformMatrix4fv(glGetUniformLocation(voxelizationShader_, "ProjY"), 1, GL_FALSE, &projY_[0][0]);
     glUniformMatrix4fv(glGetUniformLocation(voxelizationShader_, "ProjZ"), 1, GL_FALSE, &projZ_[0][0]);
+
 
     // Bind depth texture
     glActiveTexture(GL_TEXTURE0 + 5);

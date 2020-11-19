@@ -1,23 +1,26 @@
 #version 330 core
 
-layout(location = 0) in vec3 vertexPosition_model;
-layout(location = 1) in vec2 vertexUV;
-layout(location = 2) in vec3 vertexNormal_model;
-layout(location = 3) in vec3 vertexTangent_model;
-layout(location = 4) in vec3 vertexBitangent_model;
+layout(location = 0) in vec3 vertex_position_modelspace;
+layout(location = 1) in vec2 vertex_texture_UV;
 
 uniform mat4 DepthModelViewProjectionMatrix;
 uniform mat4 ModelMatrix;
 
-out vData {
-    vec2 UV;
+out vertex_data {
+    vec2 texture_UV;
     vec4 position_depth;
-} vert;
+} vertex;
 
 void main() {
-    vert.UV = vertexUV;
-    vert.position_depth = DepthModelViewProjectionMatrix * vec4(vertexPosition_model, 1);
-	vert.position_depth.xyz = vert.position_depth.xyz * 0.5f + 0.5f;
 
-    gl_Position = ModelMatrix * vec4(vertexPosition_model,1);
+    // Just initialize values from Application and prepare them to be sent over to geometry shader. Nothing special here.
+
+    vertex.texture_UV = vertex_texture_UV;
+
+    vertex.position_depth = DepthModelViewProjectionMatrix * vec4(vertex_position_modelspace, 1);
+
+	vertex.position_depth.xyz = (vertex.position_depth.xyz * 0.5f) + 0.5f;
+
+    // Transform position using Model Matrix
+    gl_Position = ModelMatrix * vec4(vertex_position_modelspace,1);
 }
